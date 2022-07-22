@@ -9,30 +9,36 @@ addpath(fullfile('C:\Users\Jonathan\Documents\CODE\fieldtrip'));
 addpath(fullfile('C:\Users\Jonathan\Documents\CODE\icn\icn_bids\templates'));
 
 ft_defaults
+
+cd('C:\Users\Jonathan\Documents\DATA\PROJECT_Berlin_dev')
 jsonfiles = dir('*.json');
+
+fh = figure;
+
 for i =1:length(jsonfiles)
     %% pathing and set-up
     intern_cfg = struct();
     cfg = struct();
 
     % This is the output root folder for our BIDS-dataset
-    rawdata_root = 'C:\Users\Jonathan\Documents\DATA\PROJECT_BERLIN_dev\rawdata8\';
+    rawdata_root = 'C:\Users\Jonathan\Documents\DATA\PROJECT_BERLIN_dev\rawdata14\';
     intern_cfg.rawdata_root = rawdata_root;
     % This is the input root folder for our BIDS-dataset
 
     
-    sourcedata_root = 'C:\Users\Jonathan\Documents\DATA\PROJECT_BERLIN_dev\rawdata\';
-    %sourcedata_root = 'C:\Users\Jonathan\Documents\CODE\sub-011';
+    %sourcedata_root = 'C:\Users\Jonathan\Documents\DATA\PROJECT_BERLIN_dev\rawdata\';
+    sourcedata_root = 'C:\Users\Jonathan\Documents\CODE\icn\icn_bids\sub-014';
     
     % This is the folder where the JSON-file is stored
     JsonFolder = pwd;
     % define name of json-file generated for this session
     intern_cfg.jsonfile = jsonfiles(i).name; 
-
-
+    %% make output dir rawdata
+    if ~exist(rawdata_root,'dir'), mkdir(rawdata_root); end
+   
     %% read the meta data 
     method = 'readjson';
-    [~,intern_cfg] =BIDS_retrieve_fieldtrip_settings(cfg, intern_cfg, method);
+    [cfg,intern_cfg] =BIDS_retrieve_fieldtrip_settings(cfg, intern_cfg, method);
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Read data with Fieldtrip 
 
@@ -49,8 +55,18 @@ for i =1:length(jsonfiles)
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %% Update channel naming and inspect data with WJN Toolbox
     if ~isequal(intern_cfg.data.label, intern_cfg.channels_tsv.name)
-        method = 'update_channels'; 
-        [~,intern_cfg] =BIDS_retrieve_fieldtrip_settings(cfg, intern_cfg, method);
+        method = 'update_channels';
+        set(0, 'CurrentFigure', fh);
+        clf reset;
+        fh = figure('units','normalized','outerposition',[0 0 1 1]);
+        wjn_plot_raw_signals(intern_cfg.data.time{1},intern_cfg.data.trial{1},intern_cfg.data.label);
+        title( intern_cfg.jsonfile, 'before relabeling', 'interpreter', 'none')
+        %saveas(gcf,fullfile(rawdata_root,['sub-',cfg.sub , '_ses-', cfg.ses, '_task-',cfg.task, '_acq-',cfg.acq, '_run-',num2str(cfg.run), '_BEFORE_relabeling.tif']))
+        saveas(gcf,fullfile(rawdata_root,['sub-',intern_cfg.entities.subject , 'ses-', intern_cfg.entities.session, 'task-',intern_cfg.entities.task, 'acq-',intern_cfg.entities.acquisition, 'run-',num2str(intern_cfg.entities.run), '_BEFORE_relabeling.tif']))
+        
+        %'sub-',intern_cfg.sub , 'ses-', intern_cfg.ses, 'task-',intern_cfg.task, 'acq-',intern_cfg.acq, 'run-',intern_cfg.run, 
+            
+        [cfg,intern_cfg] =BIDS_retrieve_fieldtrip_settings(cfg, intern_cfg, method);
 %         if isfield(intern_cfg,'poly5')
 %             remove = [];
 %             for i= 1:length(intern_cfg.data.label)
@@ -77,11 +93,15 @@ for i =1:length(jsonfiles)
 %         
 %         intern_cfg.data.hdr.label      = intern_cfg.data.label; % update the other channel names fields
 %         
-        figure('units','normalized','outerposition',[0 0 1 1])
+        set(0, 'CurrentFigure', fh);
+        clf reset;
+        fh = figure('units','normalized','outerposition',[0 0 1 1]);
         wjn_plot_raw_signals(intern_cfg.data.time{1},intern_cfg.data.trial{1},intern_cfg.data.label);
-        %cd(JsonFolder)  % reset working directory again
-        saveas(gcf,[intern_cfg.jsonfile 'CLEAN.tif'])
-    
+        title( intern_cfg.jsonfile, 'after relabeling', 'interpreter', 'none')
+        %saveas(gcf,fullfile(rawdata_root,['sub-',cfg.sub , '_ses-', cfg.ses, '_task-',cfg.task, '_acq-',cfg.acq, '_run-',num2str(cfg.run), '_AFTER_relabeling.tif']))
+        saveas(gcf,fullfile(rawdata_root,['sub-',intern_cfg.entities.subject , 'ses-', intern_cfg.entities.session, 'task-',intern_cfg.entities.task, 'acq-',intern_cfg.entities.acquisition, 'run-',num2str(intern_cfg.entities.run), '_AFTER_relabeling.tif']))
+
+        close all
     end
     
         
@@ -120,4 +140,3 @@ for i =1:length(jsonfiles)
     %% move the config file out of the way -> inside the rawdata
     movefile( intern_cfg.jsonfile , fullfile(cfg.bidsroot) )
 end
-

@@ -11,6 +11,9 @@ import json
 from TMSiSDK.file_readers import Poly5Reader
 import numpy as np
 import mne
+import ipympl
+mne.viz.set_browser_backend('qt')  # Enable mne-qt-browser backend if mne < 1.0
+
 
 # download from https://gitlab.com/tmsi/tmsi-python-interface/-/tree/main/TMSiSDK
 # and do pip install https://gitlab.com/tmsi/tmsi-python-interface/-/blob/main/requirements_Windows.txt
@@ -252,8 +255,9 @@ bids_ECOG_target = widgets.RadioButtons(
 bids_ECOG_hemisphere = widgets.RadioButtons(
     options=[
         "n/a",
-        "R",
-        "L",
+        "right",
+        "left",
+        "bilateral"
     ],
     description="ECOG hemisphere",
     style=style,
@@ -371,11 +375,13 @@ task_options = [
     ("Evoked", 7),
     ("SelfpacedSpeech", 8),
     ("ReadRelaxMoveR", 9),
-    ("VigorStimR", 10),
-    ("VigorStimL", 11),
-    ("SelfpacedHandTapL", 12),
-    ("SelfpacedHandTapR", 13),
-    ("Free", 14),
+    ("ReadRelaxMoveL", 10),
+    ("VigorStimR", 11),
+    ("VigorStimL", 12),
+    ("SelfpacedHandTapL", 13),
+    ("SelfpacedHandTapR", 14),
+    ("SelfpacedHandTapB", 15),
+    ("Free", 16),
 ]
 
 
@@ -425,10 +431,14 @@ def go_to_subsession(*args):
         "Block of 30 seconds of continuous right wrist rotation performed on a custom-built rotameter which translates degree of rotation to volt followed by a block of 30 seconds of rest followed by a block of 30 seconds of reading aloud ("
         "The Parrot and the Cat"
         " by Aesop). Multiple sets.",
+        "Block of 30 seconds of continuous left wrist rotation performed on a custom-built rotameter which translates degree of rotation to volt followed by a block of 30 seconds of rest followed by a block of 30 seconds of reading aloud ("
+        "The Parrot and the Cat"
+        " by Aesop). Multiple sets.",
         "Performance of diagonal forearm movements with a cursor on a screen using a digitizing tablet. Start and stop events are visually cued on screen with a rest duration of 350 ms. 14 blocks with 32 movements each. In blocks 3-5/9-11 bilateral stimulation is applied for 300 ms if a movement is slower/faster than the previous two movements. The order of slow/fast blocks is alternated between participants.  Performed with the right hand.",
         "Performance of diagonal forearm movements with a cursor on a screen using a digitizing tablet. Start and stop events are visually cued on screen with a rest duration of 350 ms. 14 blocks with 32 movements each. In blocks 3-5/9-11 bilateral stimulation is applied for 300 ms if a movement is slower/faster than the previous two movements. The order of slow/fast blocks is alternated between participants.  Performed with the left hand.",
         "Selfpaced left hand tapping, circa every 10 seconds, without counting, in resting seated position.",
         "Selfpaced right hand tapping, circa every 10 seconds, without counting, in resting seated position.",
+        "Bilateral selfpaced hand tapping in rested seated position, one tap every 10 seconds, the patient should not count the seconds. The hand should be raised while the wrist stays mounted on the leg. Correct the pacing of the taps when the tap-intervals are below 8 seconds, or above 12 seconds. Start with contralateral side compared to ECoG implantation-hemisfere. The investigator counts the number of taps and instructs the patients to switch tapping-side after 30 taps, for another 30 taps in the second side.",
         "Free period, no instructions, during Dyskinesia-Protocol still recorded to monitor the increasing Dopamine-Level",
     ]
     instructions = [
@@ -442,10 +452,12 @@ def go_to_subsession(*args):
         "Do not move or speak and keep your eyes open.",
         "Read aloud sentence by sentence the text in front of you. Leave a pause of several seconds in between sentences.",
         "At the beginning of each block, a text will appear on the screen, specifying the task to be performed. An auditory cue will then be issued, marking the begin of your task. Perform the task until the next cue marks the end of the task. Tasks are either continuous right wrist rotation, resting with open eyes or reading aloud the text displayed on the screen.",
+        "At the beginning of each block, a text will appear on the screen, specifying the task to be performed. An auditory cue will then be issued, marking the begin of your task. Perform the task until the next cue marks the end of the task. Tasks are either continuous left wrist rotation, resting with open eyes or reading aloud the text displayed on the screen.",
         "Your task is to move your pen from one side of the screen to the other. When you see a square, please move your pen there and stay on the square until a new square appears on the other side. Then move the pen to the new square. Please move as fast as you can and touch the screen with the pen throughout the whole experiment.",
         "Your task is to move your pen from one side of the screen to the other. When you see a square, please move your pen there and stay on the square until a new square appears on the other side. Then move the pen to the new square. Please move as fast as you can and touch the screen with the pen throughout the whole experiment.",
         "Keep both hands resting on your legs, and tap with your left hand by raising the hand and fingers of your left hand, without letting the arm be lifted from the leg. Do not count in between rotations.",
         "Keep both hands resting on your legs, and tap with your right hand by raising the hand and fingers of your right hand, without letting the arm be lifted from the leg. Do not count in between rotations.",
+        "Keep both hands resting on your legs. First tap with your left hand (if ECoG is implanted in the right hemisphere; if ECoG is implanted in left hemisphere, start with right hand) by raising the left hand and fingers while the wrist is mounted on the leg. Make one tap every +/- ten seconds. Do not count in between taps. After 30 taps, the recording investigator will instruct you to tap on with your right (i.e. left) hand. After 30 taps the recording investigator will instruct you to stop tapping.",
         "Free period, without instructions or restrictions, of rest between Rest-measurement and Task-measurements",
     ]
 
@@ -541,20 +553,27 @@ def plot_channels(*args):
             elif ch.endswith('M'):
                 preset += 'MT'
         elif ch.startswith('ECX'):
-            preset = 'ECOG_' + ch[3] + '_' + ch[4] + '_' + ch[5:8] + '_'
-            if ch.endswith('B'):
-                preset += 'BS'
-            elif ch.endswith('M'):
-                preset += 'MT'
-            elif ch.endswith('A'):
-                preset += 'AT'
+            if ch.startswith('ECXR10'):
+                preset = 'ECOG_R_10_SMC_AT'
+            elif ch.startswith('ECXR11'):
+                preset = 'ECOG_R_11_SMC_AT'
+            elif ch.startswith('ECXR12'):
+                preset = 'ECOG_R_12_SMC_AT'
+            else:
+                preset = 'ECOG_' + ch[3] + '_0' + ch[4] + '_' + ch[5:8] + '_'
+                if ch.endswith('B'):
+                    preset += 'BS'
+                elif ch.endswith('M'):
+                    preset += 'MT'
+                elif ch.endswith('A'):
+                    preset += 'AT'
         elif ch.startswith('EEG'):
             preset = 'EEG_'
-            if ch.upper().find('C1CZ'):
+            if ch.upper().find('CZ')>0:
                 preset += 'CZ_'
-            elif ch.upper().find('C1FZ'):
+            if ch.upper().find('FZ')>0:
                 preset += 'FZ_'
-            if ch.upper().find('TM'):
+            if ch.upper().find('T')>0:
                 preset += 'TM'
         elif ch.startswith('BIP 01'):
             preset = 'EMG_R_BR_TM'
@@ -574,8 +593,10 @@ def plot_channels(*args):
             preset = 'ACC_L_Y_D2_TM'
         elif ch.startswith('Z-1'):
             preset = 'ACC_L_Z_D2_TM'
-        elif ch.startswith('ISO aux'):
-            preset = 'ANALOG_R_ROTA_CH'
+        elif ch.startswith('ISO aux') and (task_options[bids_task[-1].value][0] == 'SelfpacedRotationL' or task_options[bids_task[-1].value][0] == 'BlockRotationL' or task_options[bids_task[-1].value][0] == 'ReadRelaxMoveL'):
+                preset = 'ANALOG_L_ROTA_CH'
+        elif ch.startswith('ISO aux') and (task_options[bids_task[-1].value][0] == 'SelfpacedRotationR' or task_options[bids_task[-1].value][0] == 'BlockRotationR' or task_options[bids_task[-1].value][0] == 'ReadRelaxMoveR'):
+                preset = 'ANALOG_R_ROTA_CH'
         else:
             preset = None
 
@@ -588,10 +609,16 @@ def plot_channels(*args):
         )
         bids_channel_names_widgets.append(channel_widget)
 
+
+
     with output2:
-        raw.plot(show=True, block=True, n_channels=raw.info['nchan'], title=bids_filechooser[-1].selected_filename)
+        #raw.plot(show=True, block=True, n_channels=raw.info['nchan'], title=bids_filechooser[-1].selected_filename)
+
         for widget in bids_channel_names_widgets:
             display(widget)
+
+        raw.plot(show=True, block=False, n_channels=raw.info['nchan'], title=bids_filechooser[-1].selected_filename)
+
         display(go_to_reference)
 
 draw_channels.on_click(plot_channels)

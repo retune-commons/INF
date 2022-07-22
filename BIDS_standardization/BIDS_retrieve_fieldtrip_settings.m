@@ -63,13 +63,11 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
             ECOG_hemispheres = {'R'};
         elseif strcmp(ECOG_hemisphere, 'bilateral')
             ECOG_hemispheres = {'R', 'L'};
+        else
+            error('define a valid ECOG hemisphere')
         end
     end
-    %ECOG_hemisphere = 'left'
-    %ECOG_hemisphere = 'right'
-    %ECOG_hemispheres = {'R'};
-    %ECOG_hemispheres = {'L'};
-
+    
     ECOG_model=intern_cfg.participants.ECOG_model;
     %ECOG_model = 'TS06R-AP10X-0W6'; % manufacturer: Ad-Tech
     %ECOG_model = 'DS12A-SP10X-000'; % manufacturer: Ad-Tech
@@ -192,15 +190,17 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
                 end
                 if isempty(index)
                     % if no match was found, the new name is probably on
-                    % same positition of the old one
+                    % same position of the old one
                     index = i;
                     if sum(ismember(control,index))==1
-                        continue
+                        fprintf('Channel was not found explicitly. %s is now replaced by %s \n',intern_cfg.data.label{i}, intern_cfg.poly5.new{index});
                     else
-                        error('the channel name matching did not work')
+                        error('The channel name matching did not work')
                     end
                 end
                 
+                % intern_cfg.data.label is the final channel lists, but contains here the channels
+                % that need to be removed as well
                 intern_cfg.data.label{i} = intern_cfg.poly5.new{index};
                 if isempty(intern_cfg.data.label{i})
                     remove(end+1) = i;
@@ -292,7 +292,7 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
     keySet = {'Rest', 'UPDRSIII', 'SelfpacedRotationL','SelfpacedRotationR',...
         'BlockRotationL','BlockRotationR', 'Evoked', 'SelfpacedSpeech',...
         'ReadRelaxMoveL', 'VigorStimR', 'VigorStimL', 'SelfpacedHandTapL',...
-        'SelfpacedHandTapR', 'Free'...
+        'SelfpacedHandTapR', 'SelfpacedHandTapB','Free'...
         };
     descrSet = {'Rest recording', ...
         'Recording performed during part III of the UPDRS (Unified Parkinson''s Disease Rating Scale) questionnaire.',...
@@ -307,6 +307,7 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
         'Performance of diagonal forearm movements with a cursor on a screen using a digitizing tablet. Start and stop events are visually cued on screen with a rest duration of 350 ms. 14 blocks with 32 movements each. In blocks 3-5/9-11 bilateral stimulation is applied for 300 ms if a movement is slower/faster than the previous two movements. The order of slow/fast blocks is alternated between participants.  Performed with the left hand.',...
         'Selfpaced left hand tapping, circa every 10 seconds, without counting, in resting seated position.',...
         'Selfpaced right hand tapping, circa every 10 seconds, without counting, in resting seated position.',...
+        'Bilateral selfpaced hand tapping in rested seated position, one tap every 10 seconds, the patient should not count the seconds. The hand should be raised while the wrist stays mounted on the leg. Correct the pacing of the taps when the tap-intervals are below 8 seconds, or above 12 seconds. Start with contralateral side compared to ECoG implantation-hemisfere. The investigator counts the number of taps and instructs the patients to switch tapping-side after 30 taps, for another 30 taps in the second side.',...
         'Free period, no instructions, this period is recorded during the Dyskinesia-Protocol to monitor the increasing Dopamine-Level'...
         };
     instructionSet = {'Do not move or speak and keep your eyes open.',...
@@ -322,6 +323,7 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
         'Your task is to move your pen from one side of the screen to the other. When you see a square, please move your pen there and stay on the square until a new square appears on the other side. Then move the pen to the new square. Please move as fast as you can and touch the screen with the pen throughout the whole experiment.',...
         'Keep both hands resting on your legs, and tap with your left hand by raising the hand and fingers of your left hand, without letting the arm be lifted from the leg. Do not count in between rotations.',...
         'Keep both hands resting on your legs, and tap with your right hand by raising the hand and fingers of your right hand, without letting the arm be lifted from the leg. Do not count in between rotations.',...
+        'Keep both hands resting on your legs. First tap with your left hand (if ECoG is implanted in the right hemisphere; if ECoG is implanted in left hemisphere, start with right hand) by raising the left hand and fingers while the wrist is mounted on the leg. Make one tap every +/- ten seconds. Do not count in between taps. After 30 taps, the recording investigator will instruct you to tap on with your right (i.e. left) hand. After 30 taps the recording investigator will instruct you to stop tapping.',...
         'Free period, without instructions or restrictions, between Rest-measurement and Task-measurements'...
         };
     %task_descr = containers.Map(keySet,descrSet);
@@ -340,8 +342,12 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
     cfg.bidsroot                = intern_cfg.rawdata_root;
     cfg.datatype                = 'ieeg';
     cfg.sub                     = intern_cfg.entities.subject;%'009';
+    if endsWith( intern_cfg.entities.session , digitsPattern(2))
+        cfg.ses                     = replace(intern_cfg.entities.session,'Ephys','EcogLfp');
+    else
+        error('session does not end on two digits')
+    end
     
-    cfg.ses                     = replace(intern_cfg.entities.session,'Ephys','EcogLfp');
     cfg.task                    = intern_cfg.entities.task;
     cfg.acq                     = intern_cfg.entities.acquisition; %'StimOff01';  % add here 'Dopa00' during dyskinesia-protocol recording: e.g. 'StimOff01Dopa30'. (Dyskinesia-protocol recordings start at the intake of an higher than normal Levodopa-dosage, and will always be labeled MedOn)
     if isa(intern_cfg.entities.run,'double')
@@ -440,7 +446,20 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
         cfg.ieeg.HardwareFilters        = 'n/a'; %Recommended
 
     else
-        error('Please define a valid hardware manufacturer')
+        cfg.Manufacturer                = 'Twente Medical Systems International B.V. (TMSi)';
+        cfg.ManufacturersModelName      = 'Saga 64+';
+        cfg.SoftwareVersions            = 'TMSi Polybench - QRA for SAGA - REV1.1.0';
+        cfg.DeviceSerialNumber          = '1005190056';
+        cfg.channels.low_cutoff         = repmat({'0'},intern_cfg.data.hdr.nChans,1);
+        cfg.channels.high_cutoff        = repmat({'2100'},intern_cfg.data.hdr.nChans,1); 
+        cfg.channels.high_cutoff(contains(string(chs_final),["LFP", "ECOG","EEG"])) = {'1600'};
+        Hardware_Filters.Anti_AliasFilter.Low_Pass.UnipolarChannels     = 1600;
+        Hardware_Filters.Anti_AliasFilter.Low_Pass.BipolarChannels      = 2100;
+        Hardware_Filters.Anti_AliasFilter.Low_Pass.AuxiliaryChannels    = 2100;
+        Hardware_Filters.AnalogueBandwidth = 800;
+        cfg.ieeg.SoftwareFilters        = 'no additional filters'; %MUST
+        cfg.ieeg.HardwareFilters        = Hardware_Filters; %Recommended
+        %error('Please define a valid hardware manufacturer')
     end
 
     % need to check in the LFP excel sheet on the S-drive
@@ -557,14 +576,14 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
             repmat({ECOG_material}, ECOG_contacts ,1)];
         cfg.electrodes.manufacturer = [
             repmat({cfg.participants.DBS_manufacturer},DBS_contacts*2,1);
-            repmat({cfg.participants.ECOG_manufacturer},6,1)];
+            repmat({cfg.participants.ECOG_manufacturer},ECOG_contacts,1)];
         cfg.electrodes.group        = [
             repmat({'DBS_right'},DBS_contacts,1);
             repmat({'DBS_left'},DBS_contacts,1);
             repmat({['ECOG_' cfg.participants.ECOG_hemisphere]},ECOG_contacts,1)];
         cfg.electrodes.hemisphere   = [
-            repmat({'R'},DBS_contacts,1);
-            repmat({'L'},DBS_contacts,1);
+            repmat({'right'},DBS_contacts,1);
+            repmat({'left'},DBS_contacts,1);
             repmat({ECOG_hemisphere},ECOG_contacts,1)];
         % RECOMMENDED. Type of the electrode (e.g., cup, ring, clip-on, wire, needle)
         cfg.electrodes.type         = [  
@@ -582,41 +601,56 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
     % 12 long
     % define size of single electrode contacts
     % if 1 DBS contact per level: size=6; if 3 contacts per level: s=1.5
+    add_ECOG_size = 1;
+    
     if strcmp(cfg.participants.DBS_model(1:8),'SenSight')
         cfg.electrodes.size = {
             6 1.5 1.5 1.5 1.5 1.5 1.5 6 ...
             6 1.5 1.5 1.5 1.5 1.5 1.5 6 ...
-            4.15 4.15 4.15 4.15 4.15 4.15}; %  ECoG contacts std 4.15
+            }; %  ECoG contacts std 4.15
     elseif strcmp(cfg.participants.DBS_model,'Vercise Cartesia') %= 'Vercise Directed'
         cfg.electrodes.size = {
             6 1.5 1.5 1.5 1.5 1.5 1.5 6 ...
             6 1.5 1.5 1.5 1.5 1.5 1.5 6 ...
-            4.15 4.15 4.15 4.15 4.15 4.15}; %  ECoG contacts std 4.15
+            }; %  ECoG contacts std 4.15
     elseif strcmp(cfg.participants.DBS_model,'Vercise Standard')
         cfg.electrodes.size = {
             6 6 6 6 6 6 6 6 ...
             6 6 6 6 6 6 6 6 ...
-            4.15 4.15 4.15 4.15 4.15 4.15}; %  ECoG contacts std 4.15
+            }; %  ECoG contacts std 4.15
     elseif strcmp(cfg.participants.DBS_model, 'Vercise Cartesia X')
         cfg.electrodes.size = {
             1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 6 ...
             1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 1.5 6 ...
-            4.15 4.15 4.15 4.15 4.15 4.15 ...
             }; %  ECoG contacts std 4.15
     elseif (strcmp(cfg.participants.DBS_model, 'Model 3387') || strcmp(cfg.participants.DBS_model, 'Model 3389')) % Medtronic
          cfg.electrodes.size = {
             6 6 6 6 ...
             6 6 6 6 ...
-            4.15 4.15 4.15 4.15 4.15 4.15}; %  ECoG contacts std 4.15
+            }; %  ECoG contacts std 4.15
     elseif isfield(intern_cfg.electrodes_tsv,'size')
         if ~isempty(intern_cfg.electrodes_tsv.size)
             cfg.electrodes.size = intern_cfg.electrodes_tsv.size;
+            add_ECOG_size = 0;
         else
             error('no electrode size')
         end
     else
         error('no electrode size')
     end
+    
+   if add_ECOG_size
+       if (ECOG_contacts == 6) &&  strcmp(ECOG_model,'TS06R-AP10X-0W6')
+           cfg.electrodes.size(end+1:end+6) = {2.54 2.54 2.54 2.54 2.54 2.54};
+       elseif (ECOG_contacts == 12) && strcmp(ECOG_model,'DS12A-SP10X-000')
+           cfg.electrodes.size(end+1:end+12) = {4.15 4.15 4.15 4.15 4.15 4.15 4.15 4.15 4.15 4.15 4.15 4.15};
+       else
+           error('no ECOG size specified')
+       end
+     
+   end
+      % if ECOG_
+       
     
     % Provide special channel info
     if isfield(intern_cfg,'channels_tsv')
@@ -715,39 +749,48 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
             exp.StimulationMode           = "continuous";
             exp.StimulationParadigm       = "continuous stimulation";
             exp.SimulationMontage         = "monopolar";
-            L.AnodalContact               = "Ground";
-            L.CathodalContact             = intern_cfg.stim.L.CathodalContact;
-            L.AnodalContactDirection      = "none";
-            L.CathodalContactDirection    = "omni";
-            L.CathodalContactImpedance    = "n/a";
-            L.StimulationAmplitude        = intern_cfg.stim.L.StimulationAmplitude;
-            L.StimulationPulseWidth       = 60;
-            L.StimulationFrequency        = intern_cfg.stim.L.StimulationFrequency;
-            L.InitialPulseShape           = "rectangular";
-            L.InitialPulseWidth           = 60;
-            L.InitialPulseAmplitude       = -1.0*L.StimulationAmplitude;
-            L.InterPulseDelay             = 0;
-            L.SecondPulseShape            = "rectangular";
-            L.SecondPulseWidth            = 60;
-            L.SecondPulseAmplitude        = L.StimulationAmplitude;
-            L.PostPulseInterval           = "n/a";
+            if strcmpi(intern_cfg.stim.L,'OFF')
+                L = 'OFF';
+            else
+                L.AnodalContact               = "Ground";
+                L.CathodalContact             = intern_cfg.stim.L.CathodalContact;
+                L.AnodalContactDirection      = "none";
+                L.CathodalContactDirection    = "omni";
+                L.CathodalContactImpedance    = "n/a";
+                L.StimulationAmplitude        = intern_cfg.stim.L.StimulationAmplitude;
+                L.StimulationPulseWidth       = 60;
+                L.StimulationFrequency        = intern_cfg.stim.L.StimulationFrequency;
+                L.InitialPulseShape           = "rectangular";
+                L.InitialPulseWidth           = 60;
+                L.InitialPulseAmplitude       = -1.0*L.StimulationAmplitude;
+                L.InterPulseDelay             = 0;
+                L.SecondPulseShape            = "rectangular";
+                L.SecondPulseWidth            = 60;
+                L.SecondPulseAmplitude        = L.StimulationAmplitude;
+                L.PostPulseInterval           = "n/a";
+            end
             exp.Left                      = L;
-            R.AnodalContact               = "Ground";
-            R.CathodalContact             = intern_cfg.stim.R.CathodalContact;
-            R.AnodalContactDirection      = "none";
-            R.CathodalContactDirection    = "omni";
-            R.CathodalContactImpedance    = "n/a";
-            R.StimulationAmplitude        = intern_cfg.stim.R.StimulationAmplitude;
-            R.StimulationPulseWidth       = 60;
-            R.StimulationFrequency        = intern_cfg.stim.R.StimulationFrequency;
-            R.InitialPulseShape           = "rectangular";
-            R.InitialPulseWidth           = 60;
-            R.InitialPulseAmplitude       = -1.0*R.StimulationAmplitude;
-            R.InterPulseDelay             = 0;
-            R.SecondPulseShape            = "rectangular";
-            R.SecondPulseWidth            = 60;
-            R.SecondPulseAmplitude        = R.StimulationAmplitude;
-            R.PostPulseInterval           = "n/a";
+            
+            if strcmpi(intern_cfg.stim.R,'OFF')
+                R = 'OFF';
+            else
+                R.AnodalContact               = "Ground";
+                R.CathodalContact             = intern_cfg.stim.R.CathodalContact;
+                R.AnodalContactDirection      = "none";
+                R.CathodalContactDirection    = "omni";
+                R.CathodalContactImpedance    = "n/a";
+                R.StimulationAmplitude        = intern_cfg.stim.R.StimulationAmplitude;
+                R.StimulationPulseWidth       = 60;
+                R.StimulationFrequency        = intern_cfg.stim.R.StimulationFrequency;
+                R.InitialPulseShape           = "rectangular";
+                R.InitialPulseWidth           = 60;
+                R.InitialPulseAmplitude       = -1.0*R.StimulationAmplitude;
+                R.InterPulseDelay             = 0;
+                R.SecondPulseShape            = "rectangular";
+                R.SecondPulseWidth            = 60;
+                R.SecondPulseAmplitude        = R.StimulationAmplitude;
+                R.PostPulseInterval           = "n/a";
+            end
             exp.Right                     = R;
 
             % Enter CLINICAL stimulation settings (are here equal to
