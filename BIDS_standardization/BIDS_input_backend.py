@@ -251,6 +251,7 @@ bids_ECOG_target = widgets.RadioButtons(
     description="ECOG target",
     style=style,
     layout=layout,
+    value="n/a",
 )
 bids_ECOG_hemisphere = widgets.RadioButtons(
     options=[
@@ -262,6 +263,7 @@ bids_ECOG_hemisphere = widgets.RadioButtons(
     description="ECOG hemisphere",
     style=style,
     layout=layout,
+    value="n/a",
 )
 bids_ECOG_model = widgets.RadioButtons(
     options=[
@@ -272,6 +274,7 @@ bids_ECOG_model = widgets.RadioButtons(
     description="ECOG model",
     style=style,
     layout=layout,
+    value="n/a",
 )
 bids_ECOG_description = widgets.RadioButtons(
     options=[
@@ -282,6 +285,7 @@ bids_ECOG_description = widgets.RadioButtons(
     description="ECOG description",
     style=style,
     layout={"width": "max-content"},
+    value="n/a",
 )
 mylink = widgets.jslink((bids_ECOG_model, "index"), (bids_ECOG_description, "index"))
 
@@ -547,7 +551,7 @@ def plot_channels(*args):
     for ch in raw.ch_names:
 
         if ch.startswith('LFP'):
-            preset = 'LFP_' + ch[3] + '_' + ch[4] + '_' + ch[5:8] + '_'
+            preset = 'LFP_' + ch[3] + '_0' + ch[4] + '_' + ch[5:8] + '_'
             if ch.endswith('B'):
                 preset += 'BS'
             elif ch.endswith('M'):

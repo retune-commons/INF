@@ -49,12 +49,21 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
     %ECOG_target = 'SMC'; % Sensorimotor Cortex
     if strcmp(ECOG_target_long, 'sensorimotor cortex')
         ECOG_target = 'SMC';
+    elseif strcmp(ECOG_target_long, 'n/a')
+        ECOG_target = 'n/a';        
     else
         error('ECOG target not found, please specify a valid target.')
     end
 
     if ~isfield(intern_cfg.participants,'ECOG_hemisphere')
-        intern_cfg.participants.ECOG_hemisphere=false;
+        %intern_cfg.participants
+        ECOG_hemisphere='n/a';
+    elseif strcmp(intern_cfg.participants.ECOG_hemisphere,'n/a')
+        %intern_cfg.participants.ECOG_hemisphere=false;
+        ECOG_hemisphere='n/a';
+    elseif ~intern_cfg.participants.ECOG_hemisphere
+        %intern_cfg.participants.ECOG_hemisphere=false;
+        ECOG_hemisphere='n/a';
     else
         ECOG_hemisphere=intern_cfg.participants.ECOG_hemisphere;
         if strcmp(ECOG_hemisphere, 'left')
@@ -159,6 +168,13 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
         ECOG_location              = 'subdural';
         ECOG_material              = 'platinum';
         ECOG_description           = '12-contact, 1x6 dual sided long term monitoring strip. Platinum contacts, 10mm spacing, contact size 4.0 mm diameter/2.3 mm exposure. Platinum marker.';
+    elseif strcmp(ECOG_model, 'n/a')
+        ECOG_contacts              = 0;
+        ECOG_manufacturer_short    = 'n/a';
+        ECOG_manufacturer          = 'n/a';
+        ECOG_location              = 'n/a';
+        ECOG_material              = 'n/a';
+        ECOG_description           = 'n/a';
     else
         error('ECOG model not found, please specify a valid ECOG electrode.')
     end
@@ -292,7 +308,7 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
     keySet = {'Rest', 'UPDRSIII', 'SelfpacedRotationL','SelfpacedRotationR',...
         'BlockRotationL','BlockRotationR', 'Evoked', 'SelfpacedSpeech',...
         'ReadRelaxMoveL', 'VigorStimR', 'VigorStimL', 'SelfpacedHandTapL',...
-        'SelfpacedHandTapR', 'SelfpacedHandTapB','Free'...
+        'SelfpacedHandTapR', 'SelfpacedHandTapB','Free','DyskinesiaProtocol',...
         };
     descrSet = {'Rest recording', ...
         'Recording performed during part III of the UPDRS (Unified Parkinson''s Disease Rating Scale) questionnaire.',...
@@ -308,8 +324,8 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
         'Selfpaced left hand tapping, circa every 10 seconds, without counting, in resting seated position.',...
         'Selfpaced right hand tapping, circa every 10 seconds, without counting, in resting seated position.',...
         'Bilateral selfpaced hand tapping in rested seated position, one tap every 10 seconds, the patient should not count the seconds. The hand should be raised while the wrist stays mounted on the leg. Correct the pacing of the taps when the tap-intervals are below 8 seconds, or above 12 seconds. Start with contralateral side compared to ECoG implantation-hemisfere. The investigator counts the number of taps and instructs the patients to switch tapping-side after 30 taps, for another 30 taps in the second side.',...
-        'Free period, no instructions, this period is recorded during the Dyskinesia-Protocol to monitor the increasing Dopamine-Level'...
-        };
+        'Free period, no instructions, this period is recorded during the Dyskinesia-Protocol to monitor the increasing Dopamine-Level',...
+        'Total concatenated recording of the dyskinesia protocol, as defined in the lab book'};
     instructionSet = {'Do not move or speak and keep your eyes open.',...
         'See UPDRS questionnaire.',...
         'Perform 50 wrist rotations with your left hand with an interval of about 10 seconds. Do not count in between rotations.',...
@@ -324,10 +340,10 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
         'Keep both hands resting on your legs, and tap with your left hand by raising the hand and fingers of your left hand, without letting the arm be lifted from the leg. Do not count in between rotations.',...
         'Keep both hands resting on your legs, and tap with your right hand by raising the hand and fingers of your right hand, without letting the arm be lifted from the leg. Do not count in between rotations.',...
         'Keep both hands resting on your legs. First tap with your left hand (if ECoG is implanted in the right hemisphere; if ECoG is implanted in left hemisphere, start with right hand) by raising the left hand and fingers while the wrist is mounted on the leg. Make one tap every +/- ten seconds. Do not count in between taps. After 30 taps, the recording investigator will instruct you to tap on with your right (i.e. left) hand. After 30 taps the recording investigator will instruct you to stop tapping.',...
-        'Free period, without instructions or restrictions, between Rest-measurement and Task-measurements'...
-        };
-    %task_descr = containers.Map(keySet,descrSet);
-    %task_instr = containers.Map(keySet,instructionSet);
+        'Free period, without instructions or restrictions, between Rest-measurement and Task-measurements',...
+        'Instructions for the dyskinesia protocol, as defined in the lab book'};
+    task_descr = containers.Map(keySet,descrSet);
+    task_instr = containers.Map(keySet,instructionSet);
     %task_descr = intern_cfg.task_description;
     %task_instr = intern_cfg.task_instructions;
 
@@ -381,8 +397,16 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
 
     % Provide the long description of the task and participant instructions
     cfg.TaskName                = intern_cfg.entities.task; %intern_cfg.ieeg.TaskName;
-    cfg.TaskDescription         = intern_cfg.ieeg.TaskDescription ;%task_descr(cfg.task);
-    cfg.Instructions            = intern_cfg.ieeg.Instructions ;%task_instr(cfg.task);
+    if isfield(intern_cfg.ieeg,'TaskDescription')
+        cfg.TaskDescription         = intern_cfg.ieeg.TaskDescription;
+    else
+        cfg.TaskDescription         = task_descr(intern_cfg.entities.task);
+    end
+    if isfield(intern_cfg.ieeg,'Instructions')
+        cfg.Instructions            = intern_cfg.ieeg.Instructions ;
+    else
+        cfg.Instructions            = task_instr(intern_cfg.entities.task);
+    end
 
     % Provide info about recording hardware
     if isfield(intern_cfg.ieeg,'Manufacturer')
@@ -644,6 +668,8 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
            cfg.electrodes.size(end+1:end+6) = {2.54 2.54 2.54 2.54 2.54 2.54};
        elseif (ECOG_contacts == 12) && strcmp(ECOG_model,'DS12A-SP10X-000')
            cfg.electrodes.size(end+1:end+12) = {4.15 4.15 4.15 4.15 4.15 4.15 4.15 4.15 4.15 4.15 4.15 4.15};
+       elseif (ECOG_contacts == 0) && strcmp(ECOG_model,'n/a')
+           %continue
        else
            error('no ECOG size specified')
        end
@@ -662,8 +688,12 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
         cfg.channels.status_description = bads_descr;
     end
     
+    % settings that are always applicable
+    cfg.channels.name               = chs_final;
+    cfg.channels.type               = chantype;
+    
     % Reference channels
-    cfg.ieeg.iEEGReference = 'cfr labbook';
+    
     if isfield(intern_cfg.ieeg,'iEEGReference')
         if ~strcmp(intern_cfg.ieeg.iEEGReference,'n/a') && ~strcmp(intern_cfg.ieeg.iEEGReference,'')
             cfg.ieeg.iEEGReference = intern_cfg.ieeg.iEEGReference;
@@ -674,11 +704,12 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
     refSet = {cfg.ieeg.iEEGReference, cfg.ieeg.iEEGReference, cfg.ieeg.iEEGReference, cfg.ieeg.iEEGReference, 'bipolar', 'bipolar', 'n/a'};
     ref_map = containers.Map(typeSet,refSet);
     cfg.channels.reference = arrayfun(@(ch_type) {ref_map(ch_type{1})}, chantype);
+    cfg.channels.status(find(contains(cfg.channels.name, cfg.ieeg.iEEGReference)))={'bad'}
+    cfg.channels.status_description(find(contains(cfg.channels.name, cfg.ieeg.iEEGReference)))={'Reference electrode'}
+    
         
     
-    % settings that are always applicable
-    cfg.channels.name               = chs_final;
-    cfg.channels.type               = chantype;
+    
     
     % always notch filter on n/a
     cfg.channels.notch              = n_a;
