@@ -17,9 +17,9 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
         temp = jsondecode(str);
         json_names=fieldnames(jsondecode(str));
         for k=1:length(json_names)
-            eval(['intern_cfg.' json_names{k} '=temp.' json_names{k}]);            
+            eval(['intern_cfg.' json_names{k} '=temp.' json_names{k} ';']);            
         end
-        return
+        return;
     end
 
     %% assign all variables to the cfg
@@ -187,7 +187,7 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
 
 
     
-    %%update the channels with new channels from meta data intern_cfg.channels_tsv.name
+%% update + RESET the channels with new channels from meta data intern_cfg.channels_tsv.name
     
     if strcmp(method , 'update_channels')
         if isfield(intern_cfg,'poly5')
@@ -235,74 +235,44 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
         intern_cfg.data.hdr.label      = intern_cfg.data.label; % update the other channel names fields
         
         chs_final = intern_cfg.data.label;
-        return
+        
+            %% Now assign channel types
+
+    
+        % Set channel types and channel units
+        chantype            = cell(intern_cfg.data.hdr.nChans,1);
+        for ch = 1:intern_cfg.data.hdr.nChans
+            if contains(chs_final{ch},'LFP')
+                chantype(ch) = {'DBS'};
+            elseif contains(chs_final{ch},'ECOG')
+                chantype(ch) = {'ECOG'};
+            elseif contains(chs_final{ch},'EEG')
+                chantype(ch) = {'EEG'};
+            elseif contains(chs_final{ch},'EMG')
+                chantype(ch) = {'EMG'};    
+            elseif contains(chs_final{ch},'ECG')
+                chantype(ch) = {'ECG'};   
+            else
+                chantype(ch) = {'MISC'};   
+            end
+        end
+
+       intern_cfg.data.hdr.chantype   = chantype;
+       % need to make this more generalizable
+       %if strcmp(intern_cfg.entities.subject,'EL002') ||  strcmp(intern_cfg.entities.subject,'EL004')
+       %     intern_cfg.data.hdr.chanunit   = repmat({'uV'}, intern_cfg.data.hdr.nChans,1);
+       %else
+       intern_cfg.data.hdr.chanunit   = repmat({'V'}, intern_cfg.data.hdr.nChans,1);
+       
+        
+        
+        
+        return;
     else
         chs_final = intern_cfg.channels_tsv.name;
     end
     
-    %     chs_ECOG = cell(ECOG_contacts,1);
-    %     for i = 1:length(ECOG_hemispheres)
-    %         hemisphere = ECOG_hemispheres{i};
-    %         for ind = 1:ECOG_contacts
-    %             items = ["ECOG", hemisphere, string(ind), ECOG_target, ECOG_manufacturer_short];
-    %             ch_name = join(items, '_');
-    %             chs_ECOG{ind} = ch_name{1};
-    %         end
-    %     end
-    %     intern_cfg.data.label          = chs_final;
-    %     intern_cfg.data.hdr.nChans     = length(chs_final);
-    %     intern_cfg.data.hdr.label      = intern_cfg.data.label;
-    %
-    %
-
-    %% Now assign channel types
-
-    
-    % Set channel types and channel units
-    chantype            = cell(intern_cfg.data.hdr.nChans,1);
-    for ch = 1:intern_cfg.data.hdr.nChans
-        if contains(chs_final{ch},'LFP')
-            chantype(ch) = {'DBS'};
-        elseif contains(chs_final{ch},'ECOG')
-            chantype(ch) = {'ECOG'};
-        elseif contains(chs_final{ch},'EEG')
-            chantype(ch) = {'EEG'};
-        elseif contains(chs_final{ch},'EMG')
-            chantype(ch) = {'EMG'};    
-        elseif contains(chs_final{ch},'ECG')
-            chantype(ch) = {'ECG'};   
-        else
-            chantype(ch) = {'MISC'};   
-        end
-    end
-
-   intern_cfg.data.hdr.chantype   = chantype;
-   % need to make this more generalizable
-   if strcmp(intern_cfg.entities.subject,'002') ||  strcmp(intern_cfg.entities.subject,'004')
-        intern_cfg.data.hdr.chanunit   = repmat({'uV'}, intern_cfg.data.hdr.nChans,1);
-   else
-        intern_cfg.data.hdr.chanunit   = repmat({'V'}, intern_cfg.data.hdr.nChans,1);
-   end
-   
  
-%     %% Note which channels were bad and why
-%     %bad = {'LFP_L_7_STN_MT' 'LFP_L_8_STN_MT' 'LFP_L_9_STN_MT' 'LFP_L_16_STN_MT' 'LFP_R_7_STN_MT' 'LFP_R_8_STN_MT' 'LFP_R_9_STN_MT'};
-%     %why = {'Stimulation contact' 'Stimulation contact' 'Stimulation contact' 'Reference electrode' 'Stimulation contact' 'Stimulation contact' 'Stimulation contact' 'Stimulation contact'};
-%     %     bad ={'LFP_L_8_STN_MT'};
-%     %     why = {'Reference electrode'};
-%     bad = intern_cfg.bad;
-%     why = intern_cfg.why;
-%     iEEGRef = intern_cfg.iEEGRef;
-%     %iEEGRef = 'LFP_L_8_STN_BS'; % what is the reference contact?
-% 
-%     bads = repmat({'good'},intern_cfg.data.hdr.nChans,1);
-%     bads_descr = repmat({'n/a'},intern_cfg.data.hdr.nChans,1);
-%     for k=1:length(chs_final)
-%         if ismember(chs_final{k}, bad)
-%             bads{k} = 'bad';
-%             bads_descr{k} = why{find(strcmp(bad,chs_final{k}))};
-%         end
-%     end
 
     %% Initalize containers for BIDS conversion
     keySet = {'Rest', 'UPDRSIII', 'SelfpacedRotationL','SelfpacedRotationR',...
@@ -364,6 +334,46 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
         error('session does not end on two digits')
     end
     
+    if isfield(intern_cfg,'sessions_tsv')
+        
+       cfg.sessions.acq_date = char(intern_cfg.sessions_tsv.acq_date);
+        
+    else
+       if ~strcmp(intern_cfg.scans_tsv.acq_time,'n/a')
+            cfg.sessions.acq_date =  char([intern_cfg.scans_tsv.acq_time(1:10)]);%for the sessions.tsv file
+            cfg.sessions.acq_date
+       end
+        
+    end
+    
+    if contains(cfg.ses, 'OnOff')
+        cfg.sessions.medication_state  = 'ON/OFF';
+    elseif contains(cfg.ses, 'Off')
+        cfg.sessions.medication_state  = 'OFF';
+    elseif contains(cfg.ses, 'On')
+        cfg.sessions.medication_state  = 'ON';
+    else
+        error('medication state could not be derived from session')
+    end
+    
+    UPDRS=readtable('UPDRS_Berlin.xlsx','sheet','recording_detailed');
+    rownr = find(and(contains(UPDRS.Subject, cfg.sub) , contains(UPDRS.Session, cfg.ses)));
+    if size(rownr)==[1,1]
+        cfg.sessions.UPDRS_III = UPDRS.UPDRS_III(rownr);
+        cfg.sessions.subscore_tremor_right = UPDRS.subscore_tremor_right(rownr);
+        cfg.sessions.subscore_tremor_left = UPDRS.subscore_tremor_left(rownr);
+        cfg.sessions.subscore_tremor_total = UPDRS.subscore_tremor_total(rownr);
+        cfg.sessions.subscore_rigidity_right = UPDRS.subscore_rigidity_right(rownr);
+        cfg.sessions.subscore_rigidity_left = UPDRS.subscore_rigidity_left(rownr);
+        cfg.sessions.subscore_rigidity_total = UPDRS.subscore_rigidity_total(rownr);
+        cfg.sessions.subscore_bradykinesia_right = UPDRS.subscore_bradykinesia_right(rownr);
+        cfg.sessions.subscore_bradykinesia_left = UPDRS.subscore_bradykinesia_left(rownr);
+        cfg.sessions.subscore_bradykinesia_total = UPDRS.subscore_bradykinesia_total(rownr);
+    end
+     
+    
+    
+    
     cfg.task                    = intern_cfg.entities.task;
     cfg.acq                     = intern_cfg.entities.acquisition; %'StimOff01';  % add here 'Dopa00' during dyskinesia-protocol recording: e.g. 'StimOff01Dopa30'. (Dyskinesia-protocol recordings start at the intake of an higher than normal Levodopa-dosage, and will always be labeled MedOn)
     if isa(intern_cfg.entities.run,'double')
@@ -376,22 +386,30 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
     % Provide info for the scans.tsv file
     % the acquisition time could be found in the folder name of the recording
 
-    cfg.scans.acq_time              =  intern_cfg.scans_tsv.acq_time;%'2022-01-24T09:36:27';
-    if contains(cfg.ses, 'Off')
-        cfg.scans.medication_state  = 'OFF';
-    else
-        cfg.scans.medication_state  = 'ON';
+    cfg.scans.acq_time              =  intern_cfg.scans_tsv.acq_time;
+    
+    
+    % specify ieeg specific information
+    
+    DataNotes = readtable('Data_Notes_Berlin.xlsx','sheet','TO_JSON','Range','A:J');
+    total_name =  ['sub-', cfg.sub, '_ses-', cfg.ses, '_task-', cfg.task, '_acq-',cfg.acq,'_run-',num2str(cfg.run)];
+    rownr = find((contains(DataNotes.Filename, total_name)));
+    if size(rownr)==[1,1]
+        cfg.ieeg.Recording_notes        = DataNotes.recording_notes{rownr};
+        cfg.ieeg.Data_use               = DataNotes.data_use{rownr};
+        cfg.ieeg.Reference_description  = DataNotes.reference_description{rownr};
+        cfg.ieeg.Subject_notes          = DataNotes.subject_notes{rownr}; 
     end
-    cfg.scans.UPDRS_III             =  intern_cfg.scans_tsv.UPDRS_III;%'n/a'; % need to be calcuated.
-
+    
+    
     % Specify some general information
     cfg.InstitutionName                         = 'Charite - Universitaetsmedizin Berlin, corporate member of Freie Universitaet Berlin and Humboldt-Universitaet zu Berlin, Department of Neurology with Experimental Neurology/BNIC, Movement Disorders and Neuromodulation Unit';
     cfg.InstitutionAddress                      = 'Chariteplatz 1, 10117 Berlin, Germany';
-    cfg.dataset_description.Name                = 'BIDS_Berlin_ECOG_LFP';
-    cfg.dataset_description.BIDSVersion         = '1.7.0';
+    cfg.dataset_description.Name                = 'BIDS_01_Berlin_Neurophys';
+    cfg.dataset_description.BIDSVersion         = '1.8.0';
     cfg.dataset_description.License             = 'n/a';
     cfg.dataset_description.Funding             = {'Deutsche Forschungsgemeinschaft (DFG, German Research Foundation) - Project-ID 424778381 - TRR 295'};
-    cfg.dataset_description.Authors             = {'Johannes Busch', 'Meera Chikermane', 'Katharina Faust', 'Lucia Feldmann', 'Jeroen Habets', 'Richard Koehler', 'Andrea Kuehn', 'Roxanne Lofredi', 'Timon Merk', 'Wolf-Julian Neumann', 'Gerd-Helge Schneider', 'Ulrike Uhlig', 'Jonathan Vanhoecke'};
+    cfg.dataset_description.Authors             = {'Thomas Binns','Johannes Busch','Alessia Cavallo', 'Meera Chikermane', 'Katharina Faust', 'Lucia Feldmann', 'Jeroen Habets', 'Richard Koehler', 'Andrea Kuehn', 'Roxanne Lofredi', 'Timon Merk', 'Wolf-Julian Neumann', 'Gerd-Helge Schneider', 'Ulrike Uhlig', 'Jonathan Vanhoecke'};
     cfg.dataset_description.Acknowledgements    = 'Special thanks to all other people involved in acquiring the data.';
 
 
@@ -492,8 +510,8 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
     cfg.participants.handedness             = intern_cfg.participants.handedness; %LFP excel sheet
     cfg.participants.age                    = intern_cfg.participants.age ; %LFP excel sheet
     cfg.participants.date_of_implantation   = intern_cfg.participants.date_of_implantation ;  %'2022-01-20T00:00:00'; %LFP excel sheet
-    cfg.participants.UPDRS_III_preop_OFF    = 'n/a';%-> UPDRS is on session level
-    cfg.participants.UPDRS_III_preop_ON     = 'n/a';%-> UPDRS is on session level
+    cfg.participants.UPDRS_III_preop_OFF    = 'n/a';
+    cfg.participants.UPDRS_III_preop_ON     = 'n/a';
     cfg.participants.disease_duration       = intern_cfg.participants.disease_duration;%7; %LFP excel sheet
     cfg.participants.PD_subtype             = intern_cfg.participants.PD_subtype; %'akinetic-rigid'; %SAP
     cfg.participants.symptom_dominant_side  = intern_cfg.participants.symptom_dominant_side;% 'right'; %LFP excel sheet
@@ -627,7 +645,8 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
     % if 1 DBS contact per level: size=6; if 3 contacts per level: s=1.5
     add_ECOG_size = 1;
     
-    if strcmp(cfg.participants.DBS_model(1:8),'SenSight')
+    
+    if contains(cfg.participants.DBS_model,'SenSight')
         cfg.electrodes.size = {
             6 1.5 1.5 1.5 1.5 1.5 1.5 6 ...
             6 1.5 1.5 1.5 1.5 1.5 1.5 6 ...
@@ -652,12 +671,17 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
             6 6 6 6 ...
             6 6 6 6 ...
             }; %  ECoG contacts std 4.15
-    elseif isfield(intern_cfg.electrodes_tsv,'size')
+    end
+    % in e.g. subject L005, there are segmented leads, with aberrant electrode sizes
+    % in e.g. subject L007, there are brain facing and skull facing contacts    
+    if isfield(intern_cfg.electrodes_tsv,'size') 
         if ~isempty(intern_cfg.electrodes_tsv.size)
             cfg.electrodes.size = intern_cfg.electrodes_tsv.size;
             add_ECOG_size = 0;
         else
-            error('no electrode size')
+            if isempty(cfg.electrodes.size)
+                error('no electrode size')
+            end
         end
     else
         error('no electrode size')
@@ -675,78 +699,92 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
        end
      
    end
-      % if ECOG_
+   
        
     
-    % Provide special channel info
+%% Provide special channel info
     if isfield(intern_cfg,'channels_tsv')
-        cfg.channels.status             = intern_cfg.channels_tsv.status;
-        cfg.channels.status_description = intern_cfg.channels_tsv.status_description;      
-    else
-        error('Provide special channel info in the python file')
-        cfg.channels.status             = bads;
-        cfg.channels.status_description = bads_descr;
+        if ~isempty(intern_cfg.channels_tsv.name) && ...
+            ~isempty(intern_cfg.channels_tsv.type) && ...
+            ~isempty(intern_cfg.channels_tsv.units) && ...
+            ~isempty(intern_cfg.channels_tsv.low_cutoff) && ...
+            ~isempty(intern_cfg.channels_tsv.high_cutoff) && ...
+            ~isempty(intern_cfg.channels_tsv.reference) && ...
+            ~isempty(intern_cfg.channels_tsv.group) && ...
+            ~isempty(intern_cfg.channels_tsv.sampling_frequency) && ...
+            ~isempty(intern_cfg.channels_tsv.notch) && ...
+            ~isempty(intern_cfg.channels_tsv.status) && ...
+            ~isempty(intern_cfg.channels_tsv.status_description)
+            
+%         cfg.channels.status             = intern_cfg.channels_tsv.status;
+%         cfg.channels.status_description = intern_cfg.channels_tsv.status_description;
+%         cfg.channels.name               = intern_cfg.channels_tsv.name;
+%         cfg.channels.type               = intern_cfg.channels_tsv.type;
+            cfg.channels = intern_cfg.channels_tsv; %these are recording-specific, and often manually updated or maintained
+        else
+            if ECOG_contacts == 12
+                error('need to fix code so that number channels.tsv can have fewer ECOG contacts based on the model, because sometimes they are empty or deleted') 
+            end
+            %from the python input file
+            cfg.channels.status             = intern_cfg.channels_tsv.status;
+            cfg.channels.status_description = intern_cfg.channels_tsv.status_description;
+            % settings that are mostly applicable, but now cut out
+            cfg.channels.name               = chs_final;
+            cfg.channels.type               = intern_cfg.data.hdr.chantype;
+             % MOSTLY Always reset the channels references
+            typeSet = {'EEG', 'ECOG', 'DBS', 'SEEG', 'EMG', 'ECG', 'MISC'};
+            cfg.ieeg.iEEGReference = intern_cfg.ieeg.iEEGReference ; 
+            refSet = {cfg.ieeg.iEEGReference, cfg.ieeg.iEEGReference, cfg.ieeg.iEEGReference, cfg.ieeg.iEEGReference, 'bipolar', 'bipolar', 'n/a'};
+            ref_map = containers.Map(typeSet,refSet);
+            cfg.channels.reference = arrayfun(@(ch_type) {ref_map(ch_type{1})}, cfg.channels.type);
+            cfg.channels.status(find(contains(cfg.channels.name, cfg.ieeg.iEEGReference)))={'bad'}
+            cfg.channels.status_description(find(contains(cfg.channels.name, cfg.ieeg.iEEGReference)))={'Reference electrode'}
+
+            %MOSTLY always notch filter on n/a
+            cfg.channels.notch              = n_a;
+            cfg.channels.units              = intern_cfg.data.hdr.chanunit;
+
+            sf = cell(length(chs_final),1);
+            sf(:) = {intern_cfg.data.fsample};
+            cfg.channels.sampling_frequency = sf;
+
+            cfg.channels.group              = n_a;
+            cfg.channels.group(startsWith(cfg.channels.name, 'LFP_R')) = {'DBS_right'};
+            cfg.channels.group(startsWith(cfg.channels.name, 'LFP_L')) = {'DBS_left'};
+            cfg.channels.group(startsWith(cfg.channels.name, 'ECOG_R')) = {'ECOG_right'};
+            cfg.channels.group(startsWith(cfg.channels.name, 'ECOG_L')) = {'ECOG_left'};
+            cfg.channels.group(startsWith(cfg.channels.name, 'EEG')) = {'EEG'};
+            cfg.channels.group(startsWith(cfg.channels.name, 'EMG_L')) = {'EMG_left'};
+            cfg.channels.group(startsWith(cfg.channels.name, 'EMG_R')) = {'EMG_right'};
+            cfg.channels.group(startsWith(cfg.channels.name, 'ECG')) = {'ECG'};
+            cfg.channels.group(startsWith(cfg.channels.name, 'ACC_L')) = {'accelerometer_left'};
+            cfg.channels.group(startsWith(cfg.channels.name, 'ACC_R')) = {'accelerometer_right'};
+            cfg.channels.group(startsWith(cfg.channels.name, 'ANALOG_L_ROTA')) = {'rotameter_left'};
+            cfg.channels.group(startsWith(cfg.channels.name, 'ANALOG_R_ROTA')) = {'rotameter_right'};
+
+            cfg.channels.description        = n_a; %the descriptions below are matching those of MNE despite the odd spelling!
+            cfg.channels.description(startsWith(cfg.channels.name, 'LFP')) = {'Deep Brain Stimulation'};
+            cfg.channels.description(startsWith(cfg.channels.name, 'ECOG')) = {'Electrocorticography'};
+            cfg.channels.description(startsWith(cfg.channels.name, 'EEG')) = {'ElectroEncephaloGram'};
+            cfg.channels.description(startsWith(cfg.channels.name, 'EMG')) = {'Electromyography'};
+            cfg.channels.description(startsWith(cfg.channels.name, 'ECG')) = {'ElectroCardioGram'};
+            cfg.channels.description(startsWith(cfg.channels.name, 'EOG')) = {'ElectroOculoGram'};
+            cfg.channels.description(startsWith(cfg.channels.name, 'ACC')) = {'Accelerometer'};
+            cfg.channels.description(startsWith(cfg.channels.name, 'MISC')) = {'Miscellaneous'};
+            cfg.channels.description(startsWith(cfg.channels.name, 'STIM')) = {'Trigger'};
+            cfg.channels.description(startsWith(cfg.channels.name, 'ANALOG_L_ROTA')) = {'Rotameter'};
+            cfg.channels.description(startsWith(cfg.channels.name, 'ANALOG_R_ROTA')) = {'Rotameter'};
+
+        end
     end
-    
-    % settings that are always applicable
-    cfg.channels.name               = chs_final;
-    cfg.channels.type               = chantype;
-    
-    % Reference channels
+    % Reference to the iEEG
     
     if isfield(intern_cfg.ieeg,'iEEGReference')
         if ~strcmp(intern_cfg.ieeg.iEEGReference,'n/a') && ~strcmp(intern_cfg.ieeg.iEEGReference,'')
             cfg.ieeg.iEEGReference = intern_cfg.ieeg.iEEGReference;
         end
     end
-    % Always reset the channels references
-    typeSet = {'EEG', 'ECOG', 'DBS', 'SEEG', 'EMG', 'ECG', 'MISC'};
-    refSet = {cfg.ieeg.iEEGReference, cfg.ieeg.iEEGReference, cfg.ieeg.iEEGReference, cfg.ieeg.iEEGReference, 'bipolar', 'bipolar', 'n/a'};
-    ref_map = containers.Map(typeSet,refSet);
-    cfg.channels.reference = arrayfun(@(ch_type) {ref_map(ch_type{1})}, chantype);
-    cfg.channels.status(find(contains(cfg.channels.name, cfg.ieeg.iEEGReference)))={'bad'}
-    cfg.channels.status_description(find(contains(cfg.channels.name, cfg.ieeg.iEEGReference)))={'Reference electrode'}
-    
-        
-    
-    
-    
-    % always notch filter on n/a
-    cfg.channels.notch              = n_a;
-    cfg.channels.units              = intern_cfg.data.hdr.chanunit;
-    sf = cell(length(chs_final),1);
-    sf(:) = {intern_cfg.data.fsample};
-    cfg.channels.sampling_frequency = sf;
-
-    cfg.channels.group              = n_a;
-    cfg.channels.group(startsWith(cfg.channels.name, 'LFP_R')) = {'DBS_right'};
-    cfg.channels.group(startsWith(cfg.channels.name, 'LFP_L')) = {'DBS_left'};
-    cfg.channels.group(startsWith(cfg.channels.name, 'ECOG_R')) = {'ECOG_right'};
-    cfg.channels.group(startsWith(cfg.channels.name, 'ECOG_L')) = {'ECOG_left'};
-    cfg.channels.group(startsWith(cfg.channels.name, 'EEG')) = {'EEG'};
-    cfg.channels.group(startsWith(cfg.channels.name, 'EMG_L')) = {'EMG_left'};
-    cfg.channels.group(startsWith(cfg.channels.name, 'EMG_R')) = {'EMG_right'};
-    cfg.channels.group(startsWith(cfg.channels.name, 'ECG')) = {'ECG'};
-    cfg.channels.group(startsWith(cfg.channels.name, 'ACC_L')) = {'accelerometer_left'};
-    cfg.channels.group(startsWith(cfg.channels.name, 'ACC_R')) = {'accelerometer_right'};
-    cfg.channels.group(startsWith(cfg.channels.name, 'ANALOG_L_ROTA')) = {'rotameter_left'};
-    cfg.channels.group(startsWith(cfg.channels.name, 'ANALOG_R_ROTA')) = {'rotameter_right'};
-
-    cfg.channels.description        = n_a; %the descriptions below are matching those of MNE despite the odd spelling!
-    cfg.channels.description(startsWith(cfg.channels.name, 'LFP')) = {'Deep Brain Stimulation'};
-    cfg.channels.description(startsWith(cfg.channels.name, 'ECOG')) = {'Electrocorticography'};
-    cfg.channels.description(startsWith(cfg.channels.name, 'EEG')) = {'ElectroEncephaloGram'};
-    cfg.channels.description(startsWith(cfg.channels.name, 'EMG')) = {'Electromyography'};
-    cfg.channels.description(startsWith(cfg.channels.name, 'ECG')) = {'ElectroCardioGram'};
-    cfg.channels.description(startsWith(cfg.channels.name, 'EOG')) = {'ElectroOculoGram'};
-    cfg.channels.description(startsWith(cfg.channels.name, 'ACC')) = {'Accelerometer'};
-    cfg.channels.description(startsWith(cfg.channels.name, 'MISC')) = {'Miscellaneous'};
-    cfg.channels.description(startsWith(cfg.channels.name, 'STIM')) = {'Trigger'};
-    cfg.channels.description(startsWith(cfg.channels.name, 'ANALOG_L_ROTA')) = {'Rotameter'};
-    cfg.channels.description(startsWith(cfg.channels.name, 'ANALOG_R_ROTA')) = {'Rotameter'};
-
-
-    
+ 
 
     % these are iEEG specific
     cfg.ieeg.PowerLineFrequency     = 50;   % since recorded in the Europe
@@ -779,32 +817,45 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
             exp.StimulationTarget         = DBS_target;
             exp.StimulationMode           = "continuous";
             exp.StimulationParadigm       = "continuous stimulation";
+            
+            if contains(cfg.task, 'VigorStim')
+                exp.StimulationMode           = "time-varying";
+                exp.StimulationParadigm       = "speed adaptive DBS";
+            end
+            
             exp.SimulationMontage         = "monopolar";
-            if strcmpi(intern_cfg.stim.L,'OFF')
+            if ~isfield(intern_cfg.stim, 'L')
                 L = 'OFF';
             else
-                L.AnodalContact               = "Ground";
-                L.CathodalContact             = intern_cfg.stim.L.CathodalContact;
-                L.AnodalContactDirection      = "none";
-                L.CathodalContactDirection    = "omni";
-                L.CathodalContactImpedance    = "n/a";
-                L.StimulationAmplitude        = intern_cfg.stim.L.StimulationAmplitude;
-                L.StimulationPulseWidth       = 60;
-                L.StimulationFrequency        = intern_cfg.stim.L.StimulationFrequency;
-                L.InitialPulseShape           = "rectangular";
-                L.InitialPulseWidth           = 60;
-                L.InitialPulseAmplitude       = -1.0*L.StimulationAmplitude;
-                L.InterPulseDelay             = 0;
-                L.SecondPulseShape            = "rectangular";
-                L.SecondPulseWidth            = 60;
-                L.SecondPulseAmplitude        = L.StimulationAmplitude;
-                L.PostPulseInterval           = "n/a";
+                if strcmpi(intern_cfg.stim.L,'OFF')
+                    L = 'OFF';
+                else
+                    L.AnodalContact               = "Ground";
+                    L.CathodalContact             = intern_cfg.stim.L.CathodalContact;
+                    L.AnodalContactDirection      = "none";
+                    L.CathodalContactDirection    = "omni";
+                    L.CathodalContactImpedance    = "n/a";
+                    L.StimulationAmplitude        = intern_cfg.stim.L.StimulationAmplitude;
+                    L.StimulationPulseWidth       = 60;
+                    L.StimulationFrequency        = intern_cfg.stim.L.StimulationFrequency;
+                    L.InitialPulseShape           = "rectangular";
+                    L.InitialPulseWidth           = 60;
+                    L.InitialPulseAmplitude       = -1.0*L.StimulationAmplitude;
+                    L.InterPulseDelay             = 0;
+                    L.SecondPulseShape            = "rectangular";
+                    L.SecondPulseWidth            = 60;
+                    L.SecondPulseAmplitude        = L.StimulationAmplitude;
+                    L.PostPulseInterval           = "n/a";
+                end
             end
             exp.Left                      = L;
             
-            if strcmpi(intern_cfg.stim.R,'OFF')
+            if ~isfield(intern_cfg.stim, 'R')
                 R = 'OFF';
             else
+                if strcmpi(intern_cfg.stim.R,'OFF')
+                    R = 'OFF';
+                else
                 R.AnodalContact               = "Ground";
                 R.CathodalContact             = intern_cfg.stim.R.CathodalContact;
                 R.AnodalContactDirection      = "none";
@@ -821,6 +872,7 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
                 R.SecondPulseWidth            = 60;
                 R.SecondPulseAmplitude        = R.StimulationAmplitude;
                 R.PostPulseInterval           = "n/a";
+                end
             end
             exp.Right                     = R;
 
