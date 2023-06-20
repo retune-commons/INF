@@ -19,6 +19,18 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
         for k=1:length(json_names)
             eval(['intern_cfg.' json_names{k} '=temp.' json_names{k} ';']);            
         end
+        
+        try
+            if ~isempty(intern_cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Left.CathodalContact)
+            intern_cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Left.CathodalContact=string(intern_cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Left.CathodalContact);
+            end
+        end
+        try
+            if ~isempty(intern_cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right.CathodalContact)
+            intern_cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right.CathodalContact=string(intern_cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right.CathodalContact);
+            end
+        end
+             
         return;
     end
 
@@ -167,7 +179,7 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
         ECOG_manufacturer          = 'Ad-Tech';
         ECOG_location              = 'subdural';
         ECOG_material              = 'platinum';
-        ECOG_description           = '12-contact, 1x6 dual sided long term monitoring strip. Platinum contacts, 10mm spacing, contact size 4.0 mm diameter/2.3 mm exposure. Platinum marker.';
+        ECOG_description           = '12-contact, 1x12 dual sided long term monitoring strip. Platinum contacts, 10mm spacing, contact size 4.0 mm diameter/2.3 mm exposure.';
     elseif strcmp(ECOG_model, 'n/a')
         ECOG_contacts              = 0;
         ECOG_manufacturer_short    = 'n/a';
@@ -327,27 +339,62 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
     cfg.method                  = 'convert';
     cfg.bidsroot                = intern_cfg.rawdata_root;
     cfg.datatype                = 'ieeg';
-    cfg.sub                     = intern_cfg.entities.subject;%'009';
+    cfg.sub                     = intern_cfg.entities.subject;
     if endsWith( intern_cfg.entities.session , digitsPattern(2))
         cfg.ses                     = replace(intern_cfg.entities.session,'Ephys','EcogLfp');
     else
         error('session does not end on two digits')
     end
     
-    if isfield(intern_cfg,'sessions_tsv')
-        
-       cfg.sessions.acq_date = char(intern_cfg.sessions_tsv.acq_date);
-        
-    else
-       if ~strcmp(intern_cfg.scans_tsv.acq_time,'n/a')
-            cfg.sessions.acq_date =  char([intern_cfg.scans_tsv.acq_time(1:10)]);%for the sessions.tsv file
-            cfg.sessions.acq_date
-       end
-        
-    end
     
-    if contains(cfg.ses, 'OnOff')
-        cfg.sessions.medication_state  = 'ON/OFF';
+    %% sort out later why this not work
+%     if isfield(intern_cfg,'sessions_tsv')
+%         
+%        %cfg.sessions.acq_date = char(intern_cfg.sessions_tsv.acq_date);
+%         
+%        if ~strcmp(intern_cfg.scans_tsv.acq_time,'n/a')
+%             cfg.sessions.acq_date =  char([intern_cfg.scans_tsv.acq_time(1:10)]);%for the sessions.tsv file
+%             
+%        else
+%            error('Datetime cannot be missing because the format got updated to YYYY-MM-DDT00:00:00 and date is always known')
+%        end
+%     else
+%         error('session date could not be determined')
+%     end
+    
+%     if isfield(intern_cfg,'sessions_tsv')
+%         
+%        cfg.sessions.acq_date = char(intern_cfg.sessions_tsv.acq_date);
+%         
+%     else
+%        if ~strcmp(intern_cfg.scans_tsv.acq_time,'n/a')
+%             cfg.sessions.acq_date =  char([intern_cfg.scans_tsv.acq_time(1:10)]);%for the sessions.tsv file
+%             %cfg.sessions.acq_date
+%        end
+%         
+%     end
+    %% Provide info for the scans.tsv file
+    % the acquisition time can normally be found in the folder name of the recording
+%    cfg.scans.acq_time              =  intern_cfg.scans_tsv.acq_time;
+    pat1=pattern(digitsPattern(4) + "-" + digitsPattern(2) + "-" + digitsPattern(2) + "T" + digitsPattern(2) + ":" + digitsPattern(2) + ":"+ digitsPattern(2));
+    pat2=pattern(digitsPattern(4) + "-" + digitsPattern(2) + "-" + digitsPattern(2));
+
+    if matches(intern_cfg.scans_tsv.acq_time,pat1)
+        cfg.scans.acq_time = intern_cfg.scans_tsv.acq_time; %known time point
+    elseif contains(intern_cfg.scans_tsv.acq_time,'n/a')
+        error('no datetime found in scans tsv, it contains n/a')        
+    elseif matches(intern_cfg.sessions_tsv.acq_date,pat2)
+        cfg.scans.acq_time = [intern_cfg.sessions_tsv.acq_date , 'T00:00:00']; %unknown time point
+    else
+        error('no datetime found in sessions tsv neither match in scans.tsv')
+    end
+   
+    
+   
+    %% sessions.tsv
+    cfg.sessions.acq_date_no_time = [ char([intern_cfg.scans_tsv.acq_time(1:10)]),  'T00:00:00'];
+    if contains(cfg.ses, 'OffOn')
+        cfg.sessions.medication_state  = 'OFFON';
     elseif contains(cfg.ses, 'Off')
         cfg.sessions.medication_state  = 'OFF';
     elseif contains(cfg.ses, 'On')
@@ -369,13 +416,33 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
         cfg.sessions.subscore_bradykinesia_right = UPDRS.subscore_bradykinesia_right(rownr);
         cfg.sessions.subscore_bradykinesia_left = UPDRS.subscore_bradykinesia_left(rownr);
         cfg.sessions.subscore_bradykinesia_total = UPDRS.subscore_bradykinesia_total(rownr);
+    else
+        cfg.sessions.UPDRS_III = 'n/a';
+        cfg.sessions.subscore_tremor_right = 'n/a';
+        cfg.sessions.subscore_tremor_left = 'n/a';
+        cfg.sessions.subscore_tremor_total = 'n/a';
+        cfg.sessions.subscore_rigidity_right = 'n/a';
+        cfg.sessions.subscore_rigidity_left = 'n/a';
+        cfg.sessions.subscore_rigidity_total = 'n/a';
+        cfg.sessions.subscore_bradykinesia_right = 'n/a';
+        cfg.sessions.subscore_bradykinesia_left = 'n/a';
+        cfg.sessions.subscore_bradykinesia_total = 'n/a';
+        if isequal(cfg.sessions.acq_date_no_time,'2017-10-18T00:00:00')
+            cfg.sessions.subscore_bradykinesia_total = 0; % hack to overcome that this session EL001 ses-EcogLfpMedOff01 is overwritten
+        elseif isequal(cfg.sessions.acq_date_no_time,'2022-04-08T00:00:00')
+            cfg.sessions.subscore_bradykinesia_total = 0; % hack to overcome that this session L005 ses-EcogLfpOff01 is overwritten
+        elseif isequal(cfg.sessions.acq_date_no_time,'2022-04-10T00:00:00')
+            cfg.sessions.subscore_bradykinesia_total = 0; % hack to overcome that this session L005 ses-EcogLfpOff02 is overwritten   
+        elseif isequal(cfg.sessions.acq_date_no_time,'2022-04-25T00:00:00')
+            cfg.sessions.subscore_bradykinesia_total = 0; % hack to overcome that this session L006 ses-EcogLfpOff01 is overwritten   
+        end
     end
      
     
-    
-    
     cfg.task                    = intern_cfg.entities.task;
-    cfg.acq                     = intern_cfg.entities.acquisition; %'StimOff01';  % add here 'Dopa00' during dyskinesia-protocol recording: e.g. 'StimOff01Dopa30'. (Dyskinesia-protocol recordings start at the intake of an higher than normal Levodopa-dosage, and will always be labeled MedOn)
+    %cfg.description            is determined at place of stimsettings
+    cfg.acq                     = intern_cfg.entities.acquisition; %'StimOff01';  % add here 'Dopa00' during dyskinesia-protocol recording: e.g. 'StimOffDopa30'.
+    % cfg.acq in case of StimOn is being set at the end
     if isa(intern_cfg.entities.run,'double')
         cfg.run                 = intern_cfg.entities.run;
     else
@@ -383,15 +450,10 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
     end
     cfg.space                   = intern_cfg.entities.space; %'MNI152NLin2009bAsym';
 
-    % Provide info for the scans.tsv file
-    % the acquisition time could be found in the folder name of the recording
-
-    cfg.scans.acq_time              =  intern_cfg.scans_tsv.acq_time;
-    
     
     % specify ieeg specific information
     
-    DataNotes = readtable('Data_Notes_Berlin.xlsx','sheet','TO_JSON','Range','A:J');
+    DataNotes = readtable('Data_Notes_Berlin.xlsx','sheet','TO_JSON','Range','A:K');
     total_name =  ['sub-', cfg.sub, '_ses-', cfg.ses, '_task-', cfg.task, '_acq-',cfg.acq,'_run-',num2str(cfg.run)];
     rownr = find((contains(DataNotes.Filename, total_name)));
     if size(rownr)==[1,1]
@@ -704,6 +766,11 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
     
 %% Provide special channel info
     if isfield(intern_cfg,'channels_tsv')
+        if ~isfield(intern_cfg.channels_tsv,'notch')
+            intern_cfg.channels_tsv.notch = n_a;
+        end
+    end
+    if isfield(intern_cfg,'channels_tsv')
         if ~isempty(intern_cfg.channels_tsv.name) && ...
             ~isempty(intern_cfg.channels_tsv.type) && ...
             ~isempty(intern_cfg.channels_tsv.units) && ...
@@ -789,6 +856,8 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
     % these are iEEG specific
     cfg.ieeg.PowerLineFrequency     = 50;   % since recorded in the Europe
     cfg.ieeg.iEEGGround             = 'Right shoulder patch';
+    hdr = ft_read_header(intern_cfg.inputdata_location, 'checkmaxfilter', false, 'readbids', false);
+    cfg.ieeg.RecordingDuration               = (hdr.nTrials*hdr.nSamples)/hdr.Fs; %to prevent error for dummy data
     % this is to be specified for each model
     format_groups = '%s subdural cortical strip and %s %s deep brain stimulation (DBS) leads.';
 
@@ -802,14 +871,51 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
     
     
     cfg.ieeg.RecordingType          = 'continuous';
-    if contains(cfg.acq, 'On')
+    if contains(cfg.acq, 'StimOn') || contains(cfg.acq, 'StimOffOn')
         cfg.ieeg.ElectricalStimulation  = true;
     else
         cfg.ieeg.ElectricalStimulation  = false;
     end
+    
+    
     if cfg.ieeg.ElectricalStimulation
+        
         if isfield(intern_cfg.ieeg,'ElectricalStimulationParameters')
             cfg.ieeg.ElectricalStimulationParameters = intern_cfg.ieeg.ElectricalStimulationParameters;
+            if isstruct(cfg.ieeg.ElectricalStimulationParameters)
+                if isfield(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting, 'Right')
+                    if isfield(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right, 'StimulationStatus')
+                        assert(or(strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right.StimulationStatus,'OFF'),...
+                            strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right.StimulationStatus,'ON')))
+                    else
+                        if strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right,'n/a')
+                            cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right = struct();
+                            cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right.StimulationStatus="OFF";
+                        elseif strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right,'OFF')
+                            cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right = struct();
+                            cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right.StimulationStatus="OFF";
+                        elseif strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right.InitialPulseShape,'rectangular') %to check whether there was stimulation
+                            cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right.StimulationStatus="ON";
+                        end
+                    end
+                end
+                if isfield(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting, 'Left')
+                     if isfield(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right, 'StimulationStatus')
+                        assert(or(strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right.StimulationStatus,'OFF'),...
+                            strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right.StimulationStatus,'ON')))
+                     else
+                        if strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Left,'n/a')
+                            cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Left = struct();
+                            cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Left.StimulationStatus="OFF";
+                        elseif strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Left,'OFF')
+                            cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Left = struct();
+                            cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Left.StimulationStatus="OFF";
+                        elseif strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Left.InitialPulseShape,'rectangular') %to check whether there was stimulation
+                            cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Left.StimulationStatus="ON";
+                        end
+                     end
+                end
+            end
         else
             % Enter EXPERIMENTAL stimulation settings
             % these need to be written in the lab book
@@ -818,17 +924,16 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
             exp.StimulationMode           = "continuous";
             exp.StimulationParadigm       = "continuous stimulation";
             
-            if contains(cfg.task, 'VigorStim')
-                exp.StimulationMode           = "time-varying";
-                exp.StimulationParadigm       = "speed adaptive DBS";
-            end
+            
             
             exp.SimulationMontage         = "monopolar";
             if ~isfield(intern_cfg.stim, 'L')
-                L = 'OFF';
+                %L = 'OFF';
+                L.StimulationStatus           = "OFF";
             else
-                if strcmpi(intern_cfg.stim.L,'OFF')
-                    L = 'OFF';
+                if strcmpi(intern_cfg.stim.L,"OFF")
+                    %L = 'OFF';
+                    L.StimulationStatus           = "OFF";
                 else
                     L.AnodalContact               = "Ground";
                     L.CathodalContact             = intern_cfg.stim.L.CathodalContact;
@@ -838,6 +943,7 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
                     L.StimulationAmplitude        = intern_cfg.stim.L.StimulationAmplitude;
                     L.StimulationPulseWidth       = 60;
                     L.StimulationFrequency        = intern_cfg.stim.L.StimulationFrequency;
+                    L.StimulationStatus           = "ON";
                     L.InitialPulseShape           = "rectangular";
                     L.InitialPulseWidth           = 60;
                     L.InitialPulseAmplitude       = -1.0*L.StimulationAmplitude;
@@ -851,10 +957,12 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
             exp.Left                      = L;
             
             if ~isfield(intern_cfg.stim, 'R')
-                R = 'OFF';
+               %R = 'OFF';
+               R.StimulationStatus           = "OFF";
             else
-                if strcmpi(intern_cfg.stim.R,'OFF')
-                    R = 'OFF';
+                if strcmpi(intern_cfg.stim.R,"OFF")
+                    %R = 'OFF';
+                    R.StimulationStatus           = "OFF";
                 else
                 R.AnodalContact               = "Ground";
                 R.CathodalContact             = intern_cfg.stim.R.CathodalContact;
@@ -864,6 +972,7 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
                 R.StimulationAmplitude        = intern_cfg.stim.R.StimulationAmplitude;
                 R.StimulationPulseWidth       = 60;
                 R.StimulationFrequency        = intern_cfg.stim.R.StimulationFrequency;
+                R.StimulationStatus           = "ON";
                 R.InitialPulseShape           = "rectangular";
                 R.InitialPulseWidth           = 60;
                 R.InitialPulseAmplitude       = -1.0*R.StimulationAmplitude;
@@ -876,37 +985,52 @@ function [cfg,intern_cfg] = BIDS_retrieve_fieldtrip_settings(cfg,intern_cfg, met
             end
             exp.Right                     = R;
 
-            % Enter CLINICAL stimulation settings (are here equal to
-            % stimsettings)
-    %         clin.DateOfSetting           = intern_cfg.stim.DateOfSetting;
-    %         clin.StimulationTarget       = DBS_target;
-    %         clin.StimulationMode         = "continuous";
-    %         clin.StimulationParadigm     = "continuous stimulation";
-    %         clin.SimulationMontage       = "monopolar";
-    % %         clear L R;
-    % %         L                           = "OFF";
-    %         clin.Left                    = L;
-    % %         R.AnodalContact             = "G";
-    % %         R.CathodalContact           = "2, 3 and 4";
-    % %         R.AnodalContactDirection      = "none";
-    % %         R.CathodalContactDirection    = "omni";
-    % %         R.CathodalContactImpedance    = "n/a";
-    % %         R.StimulationAmplitude        = 1.5;
-    % %         R.StimulationPulseWidth       = 60;
-    % %         R.StimulationFrequency        = 130;
-    % %         R.InitialPulseShape           = "rectangular";
-    % %         R.InitialPulseWidth           = 60;
-    % %         R.InitialPulseAmplitude       = -1.5;
-    % %         R.InterPulseDelay             = 0;
-    % %         R.SecondPulseShape            = "rectangular";
-    % %         R.SecondPulseWidth            = 60;
-    % %         R.SecondPulseAmplitude        = 1.5;
-    % %         R.PostPulseInterval           = "n/a";
-    %         clin.Right                    = R;
-
             param.BestClinicalSetting                = "Berlin parameter preset";
             param.CurrentExperimentalSetting         = exp;
-            cfg.ieeg.ElectricalStimulationParameters = param;
+            cfg.ieeg.ElectricalStimulationParameters = param;      
         end
+
+ % under if cfg.ieeg.ElectricalStimulation
+        if contains(cfg.acq, 'StimOn') && isfield(cfg.ieeg.ElectricalStimulationParameters,'CurrentExperimentalSetting')
+            if startsWith(cfg.acq, 'StimOnL')
+                assert(strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right.StimulationStatus,'OFF'))
+                assert(strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Left.StimulationStatus,'ON'))
+            elseif startsWith(cfg.acq, 'StimOnR')
+                assert(strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right.StimulationStatus,'ON'))
+                assert(strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Left.StimulationStatus,'OFF'))        
+            elseif startsWith(cfg.acq, 'StimOnB')
+                assert(strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right.StimulationStatus,'ON'))
+                assert(strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Left.StimulationStatus,'ON'))
+            elseif strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right.StimulationStatus,'OFF') && strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Left.StimulationStatus,'ON')
+                cfg.acq = replace(cfg.acq,'StimOn','StimOnL');
+            elseif strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right.StimulationStatus,'ON') && strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Left.StimulationStatus,'OFF')
+                cfg.acq = replace(cfg.acq,'StimOn','StimOnR');
+            elseif strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Right.StimulationStatus,'ON') && strcmp(cfg.ieeg.ElectricalStimulationParameters.CurrentExperimentalSetting.Left.StimulationStatus,'ON')
+                cfg.acq = replace(cfg.acq,'StimOn','StimOnB');
+            else
+                error('Stim status unknown')
+            end
+        end
+        
+ % under if cfg.ieeg.ElectricalStimulation   
+        if contains(cfg.acq, 'StimOn')        
+            if ~(contains(cfg.acq, 'StimOnL') || contains(cfg.acq, 'StimOnR') || contains(cfg.acq, 'StimOnB') || contains(cfg.acq, 'StimOnX'))
+                cfg.acq = replace(cfg.acq,'StimOn','StimOnX');
+                assert(strcmp(cfg.ieeg.ElectricalStimulationParameters,'n/a') || ischar(cfg.ieeg.ElectricalStimulationParameters))
+            end
+        elseif contains(cfg.acq, 'StimOffOn')
+            if ~(contains(cfg.acq, 'StimOffOnL') || contains(cfg.acq, 'StimOffOnR') || contains(cfg.acq, 'StimOffOnB') || contains(cfg.acq, 'StimOffOnX'))
+                cfg.acq = replace(cfg.acq,'StimOffOn','StimOffOnX');
+                assert(strcmp(cfg.ieeg.ElectricalStimulationParameters,'n/a') || ischar(cfg.ieeg.ElectricalStimulationParameters))
+            end
+        end
+        
+ % under if cfg.ieeg.ElectricalStimulation   
+        if contains(cfg.task, 'VigorStim')
+            exp.StimulationMode           = "time-varying";
+            exp.StimulationParadigm       = "speed adaptive DBS";
+            cfg.desc = intern_cfg.entities.description;     
+        end
+        
     end
- end
+end
