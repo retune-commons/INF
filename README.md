@@ -1,4 +1,4 @@
-# INF
+# INF Project for ReTune
 
 Introduction to BIDS Standards
 
