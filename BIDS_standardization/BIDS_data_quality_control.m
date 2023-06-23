@@ -4,27 +4,26 @@
 clear all, close all, clc  % actively clear workspace at start for better performance?
 restoredefaultpath
 
-addpath(fullfile('C:\Users\Jonathan\Documents\MATLAB\add_on_Matlab\wjn_toolbox'));
-addpath(fullfile('C:\Users\Jonathan\Documents\CODE\fieldtrip'));
-addpath(fullfile('C:\Users\Jonathan\Documents\CODE\icn\icn_bids\templates'));
+addpath(fullfile('...\MATLAB\add_on_Matlab\wjn_toolbox'));
+addpath(fullfile('...\fieldtrip'));
+addpath(fullfile('...\retune-commons/INF/tree/master/BIDS_standardization')); %need the BIDS_fieldtrip_settings_file
 
 ft_defaults
 
 fg = figure(1);
 %% set up pathing
 % this is where the meta json files are located
-cd('C:\Users\Jonathan\Documents\DATA\PROJECT_Berlin_dev\metadata')
+cd('...\metadata')
 % This is the output root folder for our BIDS-dataset
 rawdata_root = 'C:\Users\Jonathan\Documents\DATA\PROJECT_BERLIN_dev\rawdata_update3\';
- % This is the input root folder for our BIDS-dataset
+% This is the input root folder for our BIDS-dataset in case of BIDS dataset to BIDS dataset conversion
 % sourcedata_root = 'C:\Users\Jonathan\Documents\DATA\PROJECT_BERLIN_dev\rawdata10c\';
-%sourcedata_root = 'C:\Users\Jonathan\Documents\CODE\icn\icn_bids\sub-L017';
 %% set up conversion intensions
-use_dummy_data = true; %for updating metadata files
+use_dummy_data = false; %for updating metadata files
 % hard_coded_channel_renaming=false;
 % hard_coded_reference=false;
 %% let's start
-jsonfiles = dir('*.json');
+jsonfiles = dir('*.json'); %read in all metadata json files
 %% make output dir rawdata
 if ~exist(rawdata_root,'dir'), mkdir(rawdata_root); end
 for i =1:length(jsonfiles)
